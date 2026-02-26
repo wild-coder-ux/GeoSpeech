@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GeoSpeech</title>
+<meta name="theme-color" content="#070b14">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="GeoSpeech">
+<link rel="manifest" href="manifest.json">
+
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="leaflet/leaflet.css">
+<script src="leaflet/leaflet.js"></script>
+<style>
+:root{
+  --bg:#070b14;
+  --card:#111827cc;
+  --border:#1e293b;
+  --accent:#4fffb0;
+  --danger:#ff5c5c;
+  --text:#e2e8f0;
+  --muted:#94a3b8;
+  --nav:70px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{
+  height:100%;font-family:'DM Sans',sans-serif;
+  background:radial-gradient(circle at 30% 30%,#0b1220,#05070c 70%);
+  color:var(--text);overflow:hidden;
+}
+#app{height:100%;display:flex;flex-direction:column;overflow:hidden;}
+
+.screen{display:none;flex-direction:column;flex:1;overflow:hidden;padding-bottom:var(--nav);}
+.screen.active{display:flex;}
+#listenScreen{overflow-y:auto;}
+#mapScreen{padding-bottom:0;position:relative;}
+
+header{
+  padding:18px 18px 10px;font-size:1.35rem;font-weight:800;
+  letter-spacing:.4px;flex-shrink:0;
+}
+
+/* ── Listen ── */
+.mic-section{
+  flex:0 0 auto;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:14px;
+  padding:24px 20px 20px;
+}
+.mic-hint{
+  font-size:.8rem;color:var(--muted);text-align:center;
+  max-width:290px;line-height:1.55;background:#0f172a;
+  border:1px solid var(--border);border-radius:10px;padding:10px 14px;
+}
+.mic-hint em{color:var(--accent);font-style:normal;}
+
+.mic-btn{
+  width:108px;height:108px;border-radius:50%;
+  background:#111827;border:2px solid var(--border);
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;transition:.3s;
+  box-shadow:0 0 25px rgba(79,255,176,.15);
+}
+.mic-btn svg{width:46px;height:46px;stroke:var(--accent);fill:none;stroke-width:2;}
+.mic-btn.recording{border-color:var(--danger);box-shadow:0 0 30px rgba(255,0,0,.4);}
+.mic-btn.recording svg{stroke:var(--danger);}
+.mic-text{font-weight:700;font-size:.95rem;}
+.recording-text{color:var(--danger);}
+
+.input-row{display:flex;gap:8px;padding:12px 16px 14px;flex-shrink:0;}
+input{
+  flex:1;min-width:0;padding:12px;border-radius:12px;
+  border:1px solid var(--border);background:#0f172a;
+  color:white;font-size:.9rem;outline:none;
+}
+input::placeholder{color:var(--muted);}
+input:focus{border-color:var(--accent);}
+button.primary{
+  padding:12px 16px;border-radius:12px;border:none;
+  background:var(--accent);color:#070b14;
+  font-weight:700;font-size:.9rem;cursor:pointer;white-space:nowrap;
+}
+
+#transcript{
+  margin:0 16px 8px;padding:9px 13px;
+  background:#0f172a;border-radius:10px;
+  font-size:.82rem;color:var(--muted);
+  border:1px solid var(--border);display:none;line-height:1.5;
+}
+#journeySummary{
+  margin:0 16px 8px;padding:10px 14px;
+  background:linear-gradient(135deg,#1a2744,#111827);
+  border-radius:10px;font-size:.8rem;
+  border:1px solid #2d3f6e;display:none;
+  color:var(--accent);line-height:1.65;
+}
+#clearBtn{
+  margin:0 16px 10px;padding:9px;border-radius:10px;
+  border:1px solid var(--border);background:transparent;
+  color:var(--danger);font-size:.8rem;font-weight:600;
+  cursor:pointer;display:none;width:calc(100% - 32px);
+  font-family:'DM Sans',sans-serif;
+}
+
+/* ── Places ── */
+.places-list{flex:1;overflow-y:auto;padding:0 14px 14px;}
+
+.place-card{
+  margin-bottom:12px;padding:15px;border-radius:16px;
+  background:var(--card);backdrop-filter:blur(10px);
+  border:1px solid var(--border);
+}
+.place-card-top{display:flex;align-items:flex-start;gap:10px;margin-bottom:8px;}
+.place-index{
+  width:26px;height:26px;border-radius:50%;
+  background:var(--accent);color:#070b14;
+  font-weight:800;font-size:.8rem;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;margin-top:2px;
+}
+.place-name{font-weight:700;font-size:.95rem;line-height:1.3;}
+.place-meta{font-size:.77rem;color:var(--muted);margin-top:2px;}
+
+.type-badge{
+  display:inline-block;padding:2px 9px;border-radius:20px;
+  font-size:.7rem;font-weight:700;letter-spacing:.4px;
+  text-transform:uppercase;margin-right:4px;
+}
+.badge-country {background:#f59e0b22;color:#f59e0b;border:1px solid #f59e0b44;}
+.badge-state   {background:#818cf822;color:#818cf8;border:1px solid #818cf844;}
+.badge-city    {background:#38bdf822;color:#38bdf8;border:1px solid #38bdf844;}
+.badge-district{background:#fb718522;color:#fb7185;border:1px solid #fb718544;}
+.badge-local   {background:#a3e63522;color:#a3e635;border:1px solid #a3e63544;}
+
+.dist-chip{
+  display:inline-flex;align-items:center;gap:4px;
+  padding:3px 9px;border-radius:20px;
+  background:#1e293b;font-size:.72rem;color:var(--muted);
+}
+.dist-chip svg{width:12px;height:12px;stroke:var(--accent);fill:none;stroke-width:2;}
+
+.wiki-text{
+  font-size:.8rem;line-height:1.55;color:#c8d5e8;
+  border-left:2px solid var(--accent);padding-left:10px;
+  margin-top:9px;
+}
+.wiki-loading{font-size:.78rem;color:var(--muted);margin-top:7px;}
+
+.empty-state{text-align:center;color:var(--muted);margin-top:60px;font-size:.9rem;line-height:1.7;}
+
+/* ── Map ── */
+#mapScreen header{
+  position:absolute;top:0;left:0;right:0;z-index:1000;
+  background:linear-gradient(to bottom,#070b14ee,transparent);
+  pointer-events:none;padding-bottom:30px;
+}
+#leafletMap{width:100%;height:calc(100% - var(--nav));z-index:1;}
+
+.leaflet-popup-content-wrapper{
+  background:#111827;color:var(--text);
+  border:1px solid var(--border);border-radius:12px;font-family:'DM Sans',sans-serif;
+}
+.leaflet-popup-tip{background:#111827;}
+.popup-title{font-weight:700;font-size:.9rem;margin-bottom:3px;}
+.popup-sub{font-size:.75rem;color:#94a3b8;margin-top:2px;}
+.popup-dist{font-size:.73rem;color:var(--muted);margin-top:4px;}
+
+/* ── Nav ── */
+nav{
+  position:fixed;bottom:0;left:0;right:0;height:var(--nav);
+  background:#0d1117ee;backdrop-filter:blur(12px);
+  border-top:1px solid var(--border);display:flex;z-index:2000;
+}
+nav button{
+  flex:1;background:none;border:none;color:var(--muted);
+  font-family:'DM Sans',sans-serif;font-weight:600;
+  font-size:.82rem;cursor:pointer;transition:color .2s;
+  display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:3px;
+}
+nav button svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2;}
+nav button.active{color:var(--accent);}
+
+/* ── Reset button (in nav) ── */
+#resetBtn{
+  flex:1;background:none;border:none;color:#ff5c5c;
+  font-family:'DM Sans',sans-serif;font-weight:600;
+  font-size:.82rem;cursor:pointer;transition:color .2s;
+  display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:3px;
+  border-left:1px solid var(--border);
+}
+#resetBtn svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2;}
+#resetBtn:active{color:#ff9999;}
+
+/* loading bar */
+#loadingBar{
+  position:fixed;top:0;left:0;right:0;height:3px;
+  background:linear-gradient(90deg,var(--accent),#38bdf8);
+  z-index:9999;display:none;
+  animation:slide 1s ease-in-out infinite alternate;
+}
+@keyframes slide{from{opacity:.4}to{opacity:1}}
+
+/* ── Exit toast ── */
+#exitToast{
+  position:fixed;bottom:calc(var(--nav) + 12px);left:50%;
+  transform:translateX(-50%) translateY(20px);
+  background:#1e293b;color:var(--text);
+  padding:10px 22px;border-radius:30px;
+  font-size:.85rem;font-weight:600;
+  border:1px solid var(--border);
+  box-shadow:0 4px 20px rgba(0,0,0,.5);
+  z-index:9998;opacity:0;
+  transition:opacity .25s, transform .25s;
+  pointer-events:none;white-space:nowrap;
+}
+#exitToast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+/* ── Landing screen ── */
+#landingScreen{
+  position:fixed;inset:0;z-index:99999;
+  background:radial-gradient(circle at 35% 30%,#0d1628,#05070c 72%);
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  padding:0 28px 40px;
+  transition:opacity .45s ease, transform .45s ease;
+}
+#landingScreen.hiding{opacity:0;transform:translateY(-18px);pointer-events:none;}
+.land-globe{font-size:4rem;margin-bottom:16px;filter:drop-shadow(0 0 24px #4fffb055);}
+.land-title{font-size:2.4rem;font-weight:800;color:#fff;letter-spacing:.5px;text-align:center;margin-bottom:6px;}
+.land-tagline{font-size:1rem;color:var(--accent);font-weight:600;text-align:center;margin-bottom:8px;}
+.land-sub{font-size:.78rem;color:#475569;text-align:center;line-height:1.6;margin-bottom:36px;}
+.land-btn{
+  width:100%;max-width:320px;padding:17px;border-radius:18px;border:none;
+  background:linear-gradient(135deg,#4fffb0,#38bdf8);
+  color:#070b14;font-weight:800;font-size:1.05rem;cursor:pointer;
+  box-shadow:0 6px 28px rgba(79,255,176,.35);transition:transform .15s;
+}
+.land-btn:active{transform:scale(.97);}
+.land-foot{font-size:.65rem;color:#334155;text-align:center;margin-top:14px;line-height:1.5;}
+
+/* ── Credits screen ── */
+.credit-row{
+  display:flex;align-items:center;gap:10px;padding:10px 14px;
+  border-radius:12px;background:#111827;border:1px solid #1e293b;margin-bottom:9px;
+}
+.credit-icon{font-size:1.2rem;flex-shrink:0;}
+.credit-info{flex:1;min-width:0;}
+.credit-name{font-size:.83rem;font-weight:700;color:#e2e8f0;}
+.credit-desc{font-size:.7rem;color:#64748b;margin-top:1px;}
+.credit-badge{font-size:.62rem;padding:2px 7px;border-radius:10px;font-weight:700;flex-shrink:0;}
+.badge-free{background:#16a34a22;color:#4ade80;border:1px solid #16a34a44;}
+.badge-oss {background:#7c3aed22;color:#a78bfa;border:1px solid #7c3aed44;}
+</style>
+</head>
+<body>
+<div id="loadingBar"></div>
+<div id="exitToast">👋 Press back once more to exit</div>
+
+<!-- LANDING SCREEN — lives outside #app so nothing can hide it -->
+<div id="landingScreen">
+  <div class="land-globe">🌍</div>
+  <div class="land-title">GeoSpeech</div>
+  <div class="land-tagline">Just speak — and the world appears</div>
+  <div class="land-sub">Educational geography for everyone<br>Free · Open Source · No account needed</div>
+  <button class="land-btn" onclick="startApp()">Let's Explore the World 🚀</button>
+  <div class="land-foot">No ads · No data collected · MIT Licence</div>
+</div>
+
+<div id="app">
+
+  <!-- LISTEN -->
+  <div class="screen active" id="listenScreen">
+    <header>🌍 GeoSpeech</header>
+    <div class="mic-section">
+      <div class="mic-hint">
+        Speak naturally — try:<br>
+        <em>"Chennai and Anantapur and Puttaparthi"</em><br>or
+        type <em>Bukkapatnam</em><br><em> If multiple places add 'and'
+        between places</em>
+      </div>
+      <div class="mic-btn" id="micBtn" onclick="toggleMic()">
+        <svg viewBox="0 0 24 24">
+          <rect x="9" y="3" width="6" height="11" rx="3"/>
+          <path d="M19 10a7 7 0 01-14 0"/>
+          <line x1="12" y1="19" x2="12" y2="22"/>
+        </svg>
+      </div>
+      <div class="mic-text" id="micText">Tap to Speak</div>
+    </div>
+
+    <div id="transcript"></div>
+    <div id="journeySummary"></div>
+    <button id="clearBtn" onclick="clearAll()">🗑 Clear all places</button>
+
+    <div class="input-row">
+      <input id="textInput"
+        placeholder="Type a place or journey phrase…"
+        onkeydown="if(event.key==='Enter')detectText()">
+      <button class="primary" onclick="detectText()">Go</button>
+    </div>
+  </div>
+
+  <!-- PLACES -->
+  <div class="screen" id="placesScreen">
+    <header>📍 Places</header>
+    <div class="places-list" id="placesList">
+      <div class="empty-state">No places yet.<br>Speak or type a location to begin!</div>
+    </div>
+  </div>
+
+  <!-- MAP -->
+  <div class="screen" id="mapScreen">
+    <header style="text-align:center;">🗺 World Map</header>
+    <div id="leafletMap"></div>
+  </div>
+
+  <!-- CREDITS -->
+  <div class="screen" id="creditsScreen">
+    <header>✨ Credits</header>
+    <div class="places-list" style="padding:14px;">
+      <div style="text-align:center;padding:10px 0 20px;">
+        <div style="font-size:2.2rem;">🌍</div>
+        <div style="font-size:1.2rem;font-weight:800;margin:6px 0 4px;">GeoSpeech</div>
+        <div style="font-size:.8rem;color:#4fffb0;font-weight:600;">Just speak — and the world appears</div>
+        <div style="font-size:.72rem;color:#475569;margin-top:3px;">v1.0 · Educational Geography App</div>
+      </div>
+      <div style="font-size:.7rem;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.8px;margin-bottom:11px;">📖 Powered by open sources</div>
+      <div class="credit-row">
+        <div class="credit-icon">🗺</div>
+        <div class="credit-info">
+          <div class="credit-name">OpenStreetMap</div>
+          <div class="credit-desc">Map tiles &amp; geocoding · Open Database Licence (ODbL)</div>
+        </div>
+        <span class="credit-badge badge-free">FREE</span>
+      </div>
+      <div class="credit-row">
+        <div class="credit-icon">📖</div>
+        <div class="credit-info">
+          <div class="credit-name">Wikipedia</div>
+          <div class="credit-desc">Geography facts · CC BY-SA 4.0</div>
+        </div>
+        <span class="credit-badge badge-oss">OPEN</span>
+      </div>
+      <div class="credit-row">
+        <div class="credit-icon">📍</div>
+        <div class="credit-info">
+          <div class="credit-name">Nominatim</div>
+          <div class="credit-desc">Place name lookup · OSM-powered · No API key needed</div>
+        </div>
+        <span class="credit-badge badge-free">FREE</span>
+      </div>
+      <div class="credit-row">
+        <div class="credit-icon">🎙</div>
+        <div class="credit-info">
+          <div class="credit-name">Web Speech API</div>
+          <div class="credit-desc">Speech recognition · Built into your device · No server needed</div>
+        </div>
+        <span class="credit-badge badge-oss">BUILT-IN</span>
+      </div>
+      <div class="credit-row">
+        <div class="credit-icon">🍃</div>
+        <div class="credit-info">
+          <div class="credit-name">Leaflet.js</div>
+          <div class="credit-desc">Interactive maps · BSD 2-Clause · Offline-capable</div>
+        </div>
+        <span class="credit-badge badge-oss">OPEN</span>
+      </div>
+      <div style="margin-top:14px;padding:12px 14px;border-radius:12px;background:#0d1f14;border:1px solid #1a3a27;font-size:.75rem;color:#4fffb0;line-height:1.6;text-align:center;">
+        💚 Dedicated to the open-source community<br>
+        <span style="color:#475569;">No ads · No accounts · No data collected · MIT Licence</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<nav>
+  <button id="navListen" class="active" onclick="showScreen('listen')">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M6.3 6.3a8 8 0 000 11.4M17.7 6.3a8 8 0 010 11.4"/></svg>
+    Listen
+  </button>
+  <button id="navPlaces" onclick="showScreen('places')">
+    <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>
+    Places
+  </button>
+  <button id="navMap" onclick="showScreen('map')">
+    <svg viewBox="0 0 24 24"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
+    Map
+  </button>
+  <button id="navCredits" onclick="showScreen('credits')">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    Credits
+  </button>
+  <button id="resetBtn" onclick="clearAll()" title="Reset all places">
+    <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+    Reset
+  </button>
+</nav>
+
+<script>
+/* ════════════════════════════════════════
+   STATE
+════════════════════════════════════════ */
+let recognition;
+let listening      = false;
+let places         = [];
+let map            = null;
+let mapInitialized = false;
+let pendingFit     = false;
+let routeLine      = null;
+let markerRefs     = [];
+
+/* ════════════════════════════════════════
+   SCREENS
+════════════════════════════════════════ */
+const SCREENS = { listen:'listenScreen', places:'placesScreen', map:'mapScreen', credits:'creditsScreen' };
+
+function showScreen(id) {
+  Object.values(SCREENS).forEach(s => document.getElementById(s).classList.remove('active'));
+  document.getElementById(SCREENS[id]).classList.add('active');
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('nav' + id[0].toUpperCase() + id.slice(1)).classList.add('active');
+
+  if (id === 'map') {
+    requestAnimationFrame(() => {
+      if (!mapInitialized) initMap(); else map.invalidateSize();
+      if (pendingFit) { pendingFit = false; fitPlaces(); }
+    });
+  }
+}
+
+/* ════════════════════════════════════════
+   MAP  (Leaflet + OSM tiles — offline-friendly with local leaflet)
+════════════════════════════════════════ */
+function initMap() {
+  mapInitialized = true;
+  map = L.map('leafletMap', { zoomControl:true }).setView([20, 0], 2);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution:'© <a href="https://openstreetmap.org">OpenStreetMap</a>',
+    maxZoom:19
+  }).addTo(map);
+  // Replay any places added before map was open
+  places.forEach(p => addMarker(p));
+  if (places.length > 1) drawRoute();
+}
+
+function addMarker(p) {
+  if (!map) return;
+  const distLine = (p.distFromPrev && p.index > 1)
+    ? `<div class="popup-dist">📏 ${formatDist(p.distFromPrev)} from stop ${p.index-1}</div>`
+    : '';
+  const m = L.marker([p.lat, p.lon])
+    .addTo(map)
+    .bindPopup(`
+      <div class="popup-title">${p.index}. ${p.name}</div>
+      <div>${badgeHTML(p.type)}</div>
+      <div class="popup-sub">${[p.state, p.country].filter(Boolean).join(' · ')}</div>
+      ${distLine}
+    `);
+  markerRefs.push(m);
+}
+
+function drawRoute() {
+  if (!map || places.length < 2) return;
+  if (routeLine) map.removeLayer(routeLine);
+  routeLine = L.polyline(places.map(p => [p.lat, p.lon]), {
+    color:'#4fffb0', weight:2.5, opacity:.75, dashArray:'7 9'
+  }).addTo(map);
+}
+
+function fitPlaces() {
+  if (!map || !places.length) return;
+  if (places.length === 1) {
+    map.flyTo([places[0].lat, places[0].lon], zoomForType(places[0].type), { duration:1.5 });
+  } else {
+    const bounds = L.latLngBounds(places.map(p => [p.lat, p.lon]));
+    map.flyToBounds(bounds.pad(0.35), { duration:1.8, maxZoom:10 });
+  }
+}
+
+function zoomForType(t) {
+  return { country:4, state:6, city:9, district:12, local:14 }[t] || 7;
+}
+
+/* ════════════════════════════════════════
+   SPEECH
+════════════════════════════════════════ */
+function toggleMic() {
+  if (!recognition) setupSpeech();
+  if (listening) { recognition.stop(); return; }
+  recognition.start();
+}
+
+function setupSpeech() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { alert('Speech recognition not supported in this browser.'); return; }
+  recognition = new SR();
+  recognition.lang = 'en-US';
+  recognition.onstart = () => {
+    listening = true;
+    document.getElementById('micBtn').classList.add('recording');
+    document.getElementById('micText').innerHTML = "<span class='recording-text'>● Recording — Tap to Stop</span>";
+  };
+  recognition.onend = () => {
+    listening = false;
+    document.getElementById('micBtn').classList.remove('recording');
+    document.getElementById('micText').textContent = 'Tap to Speak';
+  };
+  recognition.onresult = e => {
+    const text = e.results[0][0].transcript;
+    const el = document.getElementById('transcript');
+    el.style.display = 'block';
+    el.textContent = '🎙 "' + text + '"';
+    processInput(text);
+  };
+}
+
+/* ════════════════════════════════════════
+   SMART PLACE EXTRACTION
+   Handles travel phrases without any external API.
+   Examples:
+     "I am travelling from Laos to Thailand then to Cambodia"
+     "I'm in Chennai and want to go to Porur then T Nagar"
+     "Paris, Berlin and Rome"
+     "New York"
+════════════════════════════════════════ */
+function extractPlaceNames(raw) {
+  let t = raw;
+
+  // 1. Strip first-person filler
+  t = t.replace(/\b(i am|i'm|i will be|i want to|i'd like to|i plan to|we are|we're|we will)\b/gi, '');
+
+  // 2. Strip movement verbs
+  t = t.replace(/\b(travelling|traveling|going|flying|driving|heading|journeying|visiting|starting|departing|stopping(?: at)?|passing through|exploring|touring)\b/gi, '');
+
+  // 3. Convert connective travel words → comma separators
+  t = t.replace(/\b(from|via|through|in|to|then|next|after|before|also|first|second|third|finally|lastly|and|&)\b/gi, ',');
+
+  // 4. Collapse whitespace and multiple commas
+  t = t.replace(/\s+/g, ' ').replace(/\s*,\s*/g, ',').replace(/,+/g, ',').replace(/^,|,$/g, '').trim();
+
+  // 5. Split, clean, deduplicate while preserving order
+  const seen  = new Set();
+  const names = [];
+  for (const part of t.split(',')) {
+    const clean = part.trim().replace(/[^a-zA-Z\s'\-\.]/g, '').trim();
+    if (clean.length < 2) continue;
+    const titled = clean.replace(/\b\w/g, c => c.toUpperCase());
+    if (!seen.has(titled.toLowerCase())) {
+      seen.add(titled.toLowerCase());
+      names.push(titled);
+    }
+  }
+  return names;
+}
+
+function detectText() {
+  const val = document.getElementById('textInput').value.trim();
+  if (val) { processInput(val); document.getElementById('textInput').value = ''; }
+}
+
+async function processInput(raw) {
+  const names = extractPlaceNames(raw);
+  if (!names.length) return;
+
+  setLoading(true);
+  const added     = [];
+  let   prevPlace = places.length ? places[places.length - 1] : null;
+
+  for (const name of names) {
+    const place = await geocodePlace(name, prevPlace);
+    if (place) { added.push(place); prevPlace = place; }
+  }
+
+  setLoading(false);
+  if (!added.length) return;
+
+  renderPlaces();
+
+  if (mapInitialized && map) {
+    added.forEach(p => addMarker(p));
+    drawRoute();
+    fitPlaces();
+    showScreen('map');
+  } else {
+    pendingFit = true;
+    showScreen('map');
+  }
+
+  updateJourneySummary();
+  updateClearBtn();
+
+  const msg = added.length === 1
+    ? `${added[0].name}. ${labelForType(added[0].type)}.`
+    : `Found ${added.length} places: ${added.map(p=>p.name).join(', ')}.`;
+  speak(msg);
+}
+
+/* ════════════════════════════════════════
+   GEOCODE  via Nominatim (OSM, free)
+════════════════════════════════════════ */
+async function geocodePlace(name, prevPlace) {
+  try {
+    const res  = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(name)}&format=json&limit=1&addressdetails=1`);
+    const data = await res.json();
+    if (!data.length) { console.warn('Not found:', name); return null; }
+
+    const d    = data[0];
+    const addr = d.address || {};
+    const lat  = parseFloat(d.lat);
+    const lon  = parseFloat(d.lon);
+    const type = resolveType(d.type, d.class, addr);
+
+    let state    = addr.state    || addr.region   || '';
+    let district = addr.county   || addr.district || '';
+    if (district === state) district = '';
+
+    const distFromPrev = prevPlace ? haversine(prevPlace.lat, prevPlace.lon, lat, lon) : null;
+
+    const place = {
+      index: places.length + 1,
+      name:  d.display_name.split(',')[0],
+      lat, lon, type, state, district,
+      country: addr.country || '',
+      distFromPrev,
+      wiki: null,
+    };
+
+    places.push(place);
+    fetchWiki(place);   // async — updates card when done
+    return place;
+  } catch(e) {
+    console.error(e);
+    return null;
+  }
+}
+
+function resolveType(type, cls, addr) {
+  // Direct type mapping
+  const direct = {
+    country:'country', state:'state', region:'state',
+    city:'city', town:'city', village:'local', hamlet:'local',
+    suburb:'local', neighbourhood:'local', quarter:'local', locality:'local',
+    county:'district', district:'district', island:'local',
+  };
+  if (direct[type]) return direct[type];
+
+  // Fallback: use address depth
+  if (addr.country && !addr.state  && !addr.city)  return 'country';
+  if (addr.state   && !addr.city   && !addr.town)  return 'state';
+  if (addr.city    || addr.town)                    return 'city';
+  if (addr.county  || addr.district)                return 'district';
+  return 'local';
+}
+
+/* ════════════════════════════════════════
+   WIKIPEDIA  (free REST API)
+════════════════════════════════════════ */
+async function fetchWiki(place) {
+  try {
+    const res = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(place.name)}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.extract) {
+      // First 2 sentences — child-friendly length
+      place.wiki = data.extract.split(/(?<=[.!?])\s+/).slice(0, 2).join(' ');
+      refreshWikiInCard(place);
+    }
+  } catch(e) { /* silent — works fully offline without */ }
+}
+
+/* ════════════════════════════════════════
+   TYPE BADGE
+════════════════════════════════════════ */
+const TYPES = {
+  country:  { emoji:'🌍', label:'Country',      cls:'badge-country'  },
+  state:    { emoji:'🗺',  label:'State/Region', cls:'badge-state'    },
+  city:     { emoji:'🏙️', label:'City / Town',  cls:'badge-city'     },
+  district: { emoji:'🏘️', label:'District',     cls:'badge-district' },
+  local:    { emoji:'📍', label:'Local Area',   cls:'badge-local'    },
+};
+
+function badgeHTML(type) {
+  const t = TYPES[type] || TYPES.local;
+  return `<span class="type-badge ${t.cls}">${t.emoji} ${t.label}</span>`;
+}
+function labelForType(type) {
+  const t = TYPES[type] || TYPES.local;
+  return t.emoji + ' ' + t.label;
+}
+
+/* ════════════════════════════════════════
+   DISTANCE
+════════════════════════════════════════ */
+function haversine(lat1, lon1, lat2, lon2) {
+  const R    = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a    = Math.sin(dLat/2)**2
+             + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function formatDist(km) {
+  if (km < 1)    return Math.round(km * 1000) + ' m';
+  if (km < 1000) return km.toFixed(0) + ' km';
+  return (km / 1000).toFixed(1) + 'k km';
+}
+
+/* ════════════════════════════════════════
+   RENDER PLACES LIST
+════════════════════════════════════════ */
+function renderPlaces() {
+  const list = document.getElementById('placesList');
+  list.innerHTML = places.length
+    ? places.map(cardHTML).join('')
+    : '<div class="empty-state">No places yet.<br>Speak or type a location to begin!</div>';
+}
+
+function cardHTML(p) {
+  const distChip = (p.distFromPrev && p.index > 1)
+    ? `<span class="dist-chip">
+         <svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+         ${formatDist(p.distFromPrev)} from stop ${p.index-1}
+       </span>` : '';
+
+  const meta  = [p.state, p.district, p.country].filter(Boolean).join(' · ');
+  const wiki  = p.wiki
+    ? `<div class="wiki-text">${p.wiki}</div>`
+    : `<div class="wiki-loading" id="wiki-${p.index}">📖 Loading facts…</div>`;
+
+  return `
+  <div class="place-card" id="card-${p.index}">
+    <div class="place-card-top">
+      <div class="place-index">${p.index}</div>
+      <div>
+        <div class="place-name">${p.name}</div>
+        <div class="place-meta">${meta}</div>
+      </div>
+    </div>
+    ${badgeHTML(p.type)} ${distChip}
+    ${wiki}
+  </div>`;
+}
+
+function refreshWikiInCard(p) {
+  const el = document.getElementById(`wiki-${p.index}`);
+  if (el && p.wiki) {
+    el.className = 'wiki-text';
+    el.removeAttribute('id');
+    el.textContent = p.wiki;
+  }
+}
+
+/* ════════════════════════════════════════
+   JOURNEY SUMMARY  (on listen screen)
+════════════════════════════════════════ */
+function updateJourneySummary() {
+  const el = document.getElementById('journeySummary');
+  if (places.length < 2) { el.style.display = 'none'; return; }
+  const total = places.reduce((s, p) => s + (p.distFromPrev || 0), 0);
+  el.style.display = 'block';
+  el.innerHTML = `🛤 <b>${places.map(p=>p.name).join(' → ')}</b><br>
+                  📏 Total straight-line distance: <b>${formatDist(total)}</b>`;
+}
+
+/* ════════════════════════════════════════
+   VOICE  (Web Speech Synthesis + Android TTS fallback)
+   Android WebView blocks speechSynthesis until:
+     1. Voices have loaded (async — we wait for voiceschanged)
+     2. It is triggered (we unlock on first user tap)
+   Fallback: Android.speak() via JavascriptInterface in MainActivity
+════════════════════════════════════════ */
+let ttsReady    = false;
+let ttsUnlocked = false;
+
+// Wait for voices to load (async on Android)
+function initTTS() {
+  if (window.speechSynthesis) {
+    const load = () => {
+      const voices = speechSynthesis.getVoices();
+      if (voices.length > 0) { ttsReady = true; }
+    };
+    speechSynthesis.addEventListener('voiceschanged', load);
+    load(); // try immediately in case already loaded
+  }
+}
+initTTS();
+
+// Unlock TTS on first user gesture (required by Android WebView)
+document.addEventListener('click', function unlockTTS() {
+  if (!ttsUnlocked && window.speechSynthesis) {
+    const u = new SpeechSynthesisUtterance('');
+    speechSynthesis.speak(u);
+    ttsUnlocked = true;
+  }
+  document.removeEventListener('click', unlockTTS);
+}, { once: true });
+
+function speak(text) {
+  if (!text) return;
+
+  // Try Web Speech API first
+  if (window.speechSynthesis && ttsUnlocked) {
+    speechSynthesis.cancel();
+    const u      = new SpeechSynthesisUtterance(text);
+    u.rate  = 0.88;
+    u.pitch = 1.05;
+    u.lang  = 'en-US';
+    // Pick a voice if available
+    const voices = speechSynthesis.getVoices();
+    const eng    = voices.find(v => v.lang.startsWith('en'));
+    if (eng) u.voice = eng;
+    speechSynthesis.speak(u);
+    return;
+  }
+
+  // Fallback: Android Java TTS bridge (MainActivity must expose Android.speak)
+  if (typeof Android !== 'undefined' && typeof Android.speak === 'function') {
+    Android.speak(text);
+    return;
+  }
+
+  // Last resort: queue it for after unlock
+  setTimeout(() => speak(text), 800);
+}
+
+/* ════════════════════════════════════════
+   UTILS
+════════════════════════════════════════ */
+function setLoading(on) {
+  document.getElementById('loadingBar').style.display = on ? 'block' : 'none';
+}
+
+function updateClearBtn() {
+  document.getElementById('clearBtn').style.display = places.length ? 'block' : 'none';
+}
+
+function clearAll() {
+  places = [];
+  markerRefs.forEach(m => map && map.removeLayer(m));
+  markerRefs = [];
+  if (routeLine && map) { map.removeLayer(routeLine); routeLine = null; }
+  renderPlaces();
+  updateJourneySummary();
+  updateClearBtn();
+  document.getElementById('journeySummary').style.display = 'none';
+  document.getElementById('transcript').style.display     = 'none';
+  speak('All places cleared.');
+}
+
+/* ════════════════════════════════════════
+   DOUBLE-BACK TO EXIT
+   Works in Android WebView & mobile browsers.
+   First back → show toast & navigate to Listen if not already there.
+   Second back within 2.2s on Listen → calls Android.exitApp() bridge.
+════════════════════════════════════════ */
+let backPressedOnce = false;
+let backTimer       = null;
+
+history.pushState({ geo: true }, '');
+
+window.addEventListener('popstate', function() {
+  const active = document.querySelector('.screen.active');
+  if (active && active.id !== 'listenScreen') {
+    showScreen('listen');
+    history.pushState({ geo: true }, '');
+    return;
+  }
+  if (!backPressedOnce) {
+    backPressedOnce = true;
+    showExitToast();
+    history.pushState({ geo: true }, '');
+    backTimer = setTimeout(() => {
+      backPressedOnce = false;
+      hideExitToast();
+    }, 2200);
+  } else {
+    clearTimeout(backTimer);
+    hideExitToast();
+    if (typeof Android !== 'undefined' && Android.exitApp) {
+      Android.exitApp();
+    } else {
+      window.close();
+    }
+  }
+});
+
+function showExitToast() {
+  document.getElementById('exitToast').classList.add('show');
+}
+function hideExitToast() {
+  document.getElementById('exitToast').classList.remove('show');
+}
+
+/* ════════════════════════════════════════
+   LANDING SCREEN
+════════════════════════════════════════ */
+function startApp() {
+  const el = document.getElementById('landingScreen');
+  el.classList.add('hiding');
+  setTimeout(() => { el.style.display = 'none'; }, 460);
+}
+
+// Only show landing on first visit per session
+(function() {
+  if (sessionStorage.getItem('gs_launched')) {
+    document.getElementById('landingScreen').style.display = 'none';
+  }
+  sessionStorage.setItem('gs_launched', '1');
+})();
+
+</script>
+</body>
+</html>
